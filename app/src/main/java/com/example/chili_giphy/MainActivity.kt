@@ -1,54 +1,94 @@
 package com.example.chili_giphy
-
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
-import android.widget.TextView
+import androidx.appcompat.widget.SearchView
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-const val BASE_URL = "https://api.giphy.com/v1/gifs/"
-class MainActivity : AppCompatActivity() {
+
+const val BASE_URL = "https://api.giphy.com/v1/"
+const val TAG = "MainActivity.kt"
+ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        getGif()
-        Log.d("TAG", "helooooooo!!@#!#!@#!!!")
 
-    }
-
-    private fun getGif(){
-        val retrofitBuilder = Retrofit.Builder()
-            .addConverterFactory(GsonConverterFactory.create())
-            .baseUrl(BASE_URL)
-            .build()
-            .create(ApiInterface::class.java)
-        val retrofitData = retrofitBuilder.getData()
-        retrofitData.enqueue(object : Callback<List<GifData>?> {
-            override fun onResponse(
-                call: Call<List<GifData>?>,
-                response: Response<List<GifData>?>
-            ) {
-                val responseBody = response.body()!!
-
-                val stringBuilder = StringBuilder()
-                for (GifData in responseBody){
-                    stringBuilder.append(GifData.url)
+        var userInput = ""
+        val handler = Handler(Looper.getMainLooper())
+        val searchRunnable = Runnable{getGifs(userInput)}
+        val searchView = findViewById<SearchView>(R.id.SV)
+        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(p0: String?): Boolean {
+                if (p0 != null) {
+                    userInput = p0.toString()
+                    getGifs(userInput)
                 }
-                var text = findViewById<TextView>(R.id.textId)
-                text.text = stringBuilder
-                Log.d("TAG", stringBuilder.toString())
-                Log.d("TAG", "helooooooo!!@#!#!@#!!!")
-                print("hello")
+                return true
             }
-
-            override fun onFailure(call: Call<List<GifData>?>, t: Throwable) {
-                Log.d("WHAT THE FUCK WHY THIS ISNT WORRKING I DONT KNOW BUT WANT TO KNOW", "OnFailure:" +t.message)
-
+            override fun onQueryTextChange(text: String?): Boolean {
+                userInput = text.toString()
+                handler.removeCallbacks(searchRunnable)
+                handler.postDelayed(searchRunnable, 300L)
+                return true
             }
         })
     }
-}
+     private fun getGifs(userInput: String) {
+         val recyclerView = findViewById<RecyclerView>(R.id.recyclerView)
+         val gifs = mutableListOf<DataObject>()
+         val adapter = GifsAdapter(this, gifs)
+         recyclerView.adapter = adapter
+         recyclerView.setHasFixedSize(true)
+         recyclerView.layoutManager = GridLayoutManager(this, 2)
+         adapter.setOnItemClickListener(object: GifsAdapter.OnItemClickListener{
+             override fun onItemClick(position: Int) {
+                 val intent = Intent(this@MainActivity, SecondActivity::class.java)
+                 intent.putExtra("url", gifs[position].images.originalImage.url)
+                 startActivity(intent)
+             }
+         })
+
+
+         val retrofit = Retrofit.Builder().baseUrl(BASE_URL)
+             .addConverterFactory(GsonConverterFactory.create())
+             .build()
+
+         val retroService = retrofit.create(ApiInterface::class.java)
+         retroService.getData(userInput).enqueue(object : Callback<DataResult?> {
+             override fun onResponse(call: Call<DataResult?>, response: Response<DataResult?>) {
+                 val body = response.body()
+                 if (body == null) {
+                     Log.d(TAG, "onFailure: There is no response!")
+                 }
+
+                 gifs.addAll(body!!.res)
+                 adapter.notifyDataSetChanged()
+             }
+
+             override fun onFailure(call: Call<DataResult?>, t: Throwable) {
+                 Log.d(TAG, "onFailure: Something Failed")
+             }
+         })
+
+     }
+
+
+ }
+
+
+
+
+
+
+
+
+
